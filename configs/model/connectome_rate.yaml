@@ -1,0 +1,8 @@
+model:
+  kind: connectome_rate
+  encoder: cnn
+  leak: 0.5
+  weight_scale: 0.05
+  trainable_weights: true
+  normalize_incoming: true
+  propagation_steps: 5
