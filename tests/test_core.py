@@ -49,6 +49,19 @@ def test_subgraph_extracts_source_to_target_paths() -> None:
     assert selected.edge_count == 3
 
 
+def test_semantic_descending_filter_uses_canonical_flag() -> None:
+    graph = tiny_graph()
+    graph.neurons.loc[graph.neurons["body_id"] == 3, ["class", "type"]] = ["central", "DNp04"]
+    graph = ConnectomeGraph(graph.neurons, graph.edges)
+
+    selected = extract_subgraph(
+        graph,
+        SubgraphSpec(source_class="visual", target_class="descending", num_hops=4),
+    )
+
+    assert selected.neurons["body_id"].tolist() == [90, 12, 44, 3]
+
+
 def test_mock_connectome_uses_canonical_schema() -> None:
     graph = generate_mock_connectome(100, seed=7)
     assert graph.node_count == 100

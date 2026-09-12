@@ -30,9 +30,17 @@ class SubgraphSpec:
 def _matches(neurons: pd.DataFrame, *, kind: str | None, region: str | None) -> pd.Series:
     mask = pd.Series(True, index=neurons.index)
     if kind:
-        mask &= neurons["class"].fillna("").astype(str).str.contains(
+        kind_mask = neurons["class"].fillna("").astype(str).str.contains(
             kind, case=False, regex=True
         ) | neurons["type"].fillna("").astype(str).str.contains(kind, case=False, regex=True)
+        semantic_column = {
+            "sensory": "is_sensory",
+            "descending": "is_descending",
+            "motor": "is_motor",
+        }.get(kind.strip().lower())
+        if semantic_column and semantic_column in neurons:
+            kind_mask |= neurons[semantic_column].fillna(False).astype(bool)
+        mask &= kind_mask
     if region:
         mask &= (
             neurons["region"].fillna("").astype(str).str.contains(region, case=False, regex=True)
@@ -65,6 +73,11 @@ def extract_subgraph(graph: ConnectomeGraph, spec: SubgraphSpec) -> ConnectomeGr
     target_mask = _matches(neurons, kind=spec.target_class, region=spec.target_region) & eligible
     targets = set(neurons.loc[target_mask, "body_id"])
     target_filters_active = bool(spec.target_class or spec.target_region)
+    if target_filters_active and not targets:
+        raise ValueError(
+            "No target neurons matched the extraction specification "
+            f"(target_class={spec.target_class!r}, target_region={spec.target_region!r})"
+        )
 
     allowed = set(neurons.loc[eligible, "body_id"]) | set(sources) | set(targets)
     edges = edges.loc[edges["pre_body_id"].isin(allowed) & edges["post_body_id"].isin(allowed)]
@@ -105,7 +118,10 @@ def extract_subgraph(graph: ConnectomeGraph, spec: SubgraphSpec) -> ConnectomeGr
                         queue.append(predecessor)
         reached = keep
     if not reached:
-        raise ValueError("No source-to-target subgraph was found")
+        raise ValueError(
+            "No source-to-target path was found within "
+            f"{spec.num_hops} hops at min_synapses={spec.min_synapses}"
+        )
 
     cap = min(spec.max_neurons, spec.top_connected or spec.max_neurons)
     if len(reached) > cap:

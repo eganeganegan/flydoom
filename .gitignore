@@ -12,3 +12,4 @@ data/processed/*
 !data/processed/.gitkeep
 outputs/
 results/
+.vscode/
