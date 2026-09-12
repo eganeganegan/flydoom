@@ -53,6 +53,28 @@ python -m pip install -e '.[doom,tracking]'
 
 The mock fallback requires no DOOM installation. It uses the same image, action, and Gymnasium interfaces as the VizDoom boundary.
 
+### Windows and remote Windows
+
+Install 64-bit Python 3.12 and Git on the Windows computer, clone this repository, then run the bootstrap script from PowerShell:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\setup_windows.ps1
+```
+
+The script creates `.venv`, installs the development dependencies, runs the tests, and performs a short CPU smoke experiment. For an NVIDIA computer with a current driver:
+
+```powershell
+.\scripts\setup_windows.ps1 -Device cuda -TrainingSteps 1024
+```
+
+Add `-InstallVizDoom` to install the optional VizDoom package. The smoke run intentionally uses the deterministic mock environment; after it passes, run VizDoom with:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\train.py experiment=flydoom_basic data=mock_connectome model=connectome_rate vizdoom=basic env.backend=vizdoom device=cuda seed=42
+```
+
+
 ## First milestone
 
 Run the requested comparison:
