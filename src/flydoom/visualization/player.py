@@ -196,9 +196,10 @@ class ActivityPlayer:
         self.frame_actor.SetTexture(texture)
         action = int(self.trace.actions[self.index])
         name = ACTION_NAMES[action] if 0 <= action < len(ACTION_NAMES) else str(action)
-        self.status.SetInput(
+        self.status.set_text(
+            "lower_left",
             f"t={self.index / self.trace.fps:6.2f}s   action={name}   "
-            f"reward={self.trace.rewards[self.index]:+.3f}   speed={self.speed:g}x"
+            f"reward={self.trace.rewards[self.index]:+.3f}   speed={self.speed:g}x",
         )
         self.plotter.render()
 
