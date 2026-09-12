@@ -1,4 +1,0 @@
-env:
-  backend: vizdoom
-  scenario: VizdoomBasic-v0
-  max_episode_steps: 2100

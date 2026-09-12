@@ -1,1 +1,0 @@
-"""Research visualization helpers."""

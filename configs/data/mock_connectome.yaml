@@ -1,7 +1,0 @@
-data:
-  kind: mock
-  node_count: 1000
-  seed: 17
-  min_synapses: 1
-  max_neurons: 1000
-  num_hops: 8
