@@ -175,7 +175,8 @@ python scripts/evaluate.py outputs/YYYY-MM-DD/fly_connectome_seed_42 --rerun --e
 The primary activity viewer is a browser-based Three.js application. It avoids WSL/X11
 rendering problems and adds GPU bloom, live activity shaders, orbit controls, a Doom
 picture-in-picture feed, metrics, scrubbing, playback speed, activity gain, and
-fullscreen mode. Node.js `20.19+` (or `22.12+`) is required by the pinned Vite version.
+fullscreen mode. The pinned toolchain supports Node.js `18+`, including the Node
+`18.19.1` release commonly installed by Ubuntu/WSL.
 
 Export a recorded trace together with the exact graph used by the policy:
 
@@ -187,7 +188,7 @@ python scripts/export_web_viewer.py \
 
 cd viewer
 npm install
-npm run dev -- --host 0.0.0.0
+npm run dev
 ```
 
 Open `http://localhost:5173` in the Windows browser. Drag to orbit, scroll to zoom,

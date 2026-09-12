@@ -341,12 +341,16 @@ function buildViewer(data) {
   });
 }
 
-try {
-  const data = await loadSession();
-  buildViewer(data);
-  ui.loading.classList.add("hidden");
-} catch (error) {
-  console.error(error);
-  ui["loading-message"].textContent = error.message;
-  ui["loading-message"].style.color = "#ff9b78";
+async function main() {
+  try {
+    const data = await loadSession();
+    buildViewer(data);
+    ui.loading.classList.add("hidden");
+  } catch (error) {
+    console.error(error);
+    ui["loading-message"].textContent = error.message;
+    ui["loading-message"].style.color = "#ff9b78";
+  }
 }
+
+main();
