@@ -168,7 +168,13 @@ def load_male_cns_neuprint(
     ]
     initial = fetch_neurons(criteria, omit_rois=True, returned_columns=properties, client=client)
     if initial.empty:
-        raise ValueError("The neuPrint criteria matched no Male CNS neurons")
+        requested = {
+            "types": types,
+            "classes": classes,
+            "rois": rois,
+            "body_ids": body_ids,
+        }
+        raise ValueError(f"The neuPrint criteria matched no Male CNS neurons: {requested}")
     initial = initial.head(max_neurons)
     source_ids = set(initial["bodyId"])
     seen = set(source_ids)

@@ -93,7 +93,7 @@ The only built-in biological source is the [HHMI Janelia Male CNS Connectome](ht
 export NEUPRINT_TOKEN='paste-token-here'
 python scripts/build_subgraph.py \
   --mode neuprint \
-  --type 'R1-6.*' \
+  --type 'LC4' \
   --target-class descending \
   --min-synapses 3 \
   --num-hops 4 \
@@ -102,6 +102,9 @@ python scripts/build_subgraph.py \
 ```
 
 The adapter constructs `Client("https://neuprint.janelia.org", dataset="male-cns:v1.0", token=...)` and uses `neuprint-python` targeted adjacency queries. Never commit the token; `.env` files and raw data are ignored.
+
+`LC4` is a confirmed visual projection-neuron type in the Male CNS v1.0 dataset. The
+photoreceptor-style pattern `R1-6.*` does not match the dataset's `type` field.
 
 ### Mode 2: official bulk Feather files
 

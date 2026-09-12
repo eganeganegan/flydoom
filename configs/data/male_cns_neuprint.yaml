@@ -1,6 +1,6 @@
 data:
   kind: neuprint
-  types: ["R1-6.*"]
+  types: ["LC4"]
   classes: null
   regions: null
   body_ids: null
