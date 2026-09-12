@@ -115,3 +115,4 @@ def test_episode_trace_round_trip(tmp_path) -> None:
     loaded = EpisodeTrace.load(path)
     assert loaded.activity.shape == (2, 3)
     assert loaded.fps == 20
+    assert loaded.action_name(4) == "shoot"

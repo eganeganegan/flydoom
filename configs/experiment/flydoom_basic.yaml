@@ -1,7 +1,7 @@
 experiment:
   name: flydoom_basic
   variants: [real_connectome, erdos_renyi, degree_rewired, mlp, gru, lstm]
-  evaluation_episodes: 3
+  evaluation_episodes: 20
 training:
   total_steps: 20000
   rollout_steps: 128

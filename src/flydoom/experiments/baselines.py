@@ -39,9 +39,29 @@ class GRUPolicy(MLPPolicy):
         self.hidden = nn.GRUCell(hidden_size, hidden_size)
 
     def forward(self, observation: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        encoded = self.encoder(observation)
-        hidden = self.hidden(encoded, torch.zeros_like(encoded))
-        return self.actor(hidden), self.critic(hidden).squeeze(-1)
+        state = self.initial_state(len(observation), observation.device)
+        logits, value, _ = self.forward_recurrent(observation, state)
+        return logits, value
+
+    def initial_state(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        return torch.zeros(batch_size, self.actor.in_features, device=device)
+
+    def forward_recurrent(
+        self, observation: torch.Tensor, state: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        hidden = self.hidden(self.encoder(observation), state)
+        return self.actor(hidden), self.critic(hidden).squeeze(-1), hidden
+
+    def act_recurrent(self, observation, state, deterministic: bool = False):
+        logits, value, next_state = self.forward_recurrent(observation, state)
+        distribution = Categorical(logits=logits)
+        action = logits.argmax(-1) if deterministic else distribution.sample()
+        return action, distribution.log_prob(action), value, next_state
+
+    def evaluate_actions_recurrent(self, observation, action, state):
+        logits, value, _ = self.forward_recurrent(observation, state)
+        distribution = Categorical(logits=logits)
+        return distribution.log_prob(action), distribution.entropy(), value
 
 
 class LSTMPolicy(MLPPolicy):
@@ -52,7 +72,29 @@ class LSTMPolicy(MLPPolicy):
         self.hidden = nn.LSTMCell(hidden_size, hidden_size)
 
     def forward(self, observation: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        encoded = self.encoder(observation)
-        zeros = torch.zeros_like(encoded)
-        hidden, _ = self.hidden(encoded, (zeros, zeros))
-        return self.actor(hidden), self.critic(hidden).squeeze(-1)
+        state = self.initial_state(len(observation), observation.device)
+        logits, value, _ = self.forward_recurrent(observation, state)
+        return logits, value
+
+    def initial_state(
+        self, batch_size: int, device: torch.device
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        zeros = torch.zeros(batch_size, self.actor.in_features, device=device)
+        return zeros, zeros.clone()
+
+    def forward_recurrent(
+        self, observation: torch.Tensor, state: tuple[torch.Tensor, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        hidden, cell = self.hidden(self.encoder(observation), state)
+        return self.actor(hidden), self.critic(hidden).squeeze(-1), (hidden, cell)
+
+    def act_recurrent(self, observation, state, deterministic: bool = False):
+        logits, value, next_state = self.forward_recurrent(observation, state)
+        distribution = Categorical(logits=logits)
+        action = logits.argmax(-1) if deterministic else distribution.sample()
+        return action, distribution.log_prob(action), value, next_state
+
+    def evaluate_actions_recurrent(self, observation, action, state):
+        logits, value, _ = self.forward_recurrent(observation, state)
+        distribution = Categorical(logits=logits)
+        return distribution.log_prob(action), distribution.entropy(), value

@@ -51,15 +51,27 @@ class ConnectomePolicy(nn.Module):
         return logits, value
 
     def forward_with_activity(
-        self, observation: torch.Tensor
+        self, observation: torch.Tensor, state: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return policy outputs plus the full node state for synchronized recording."""
         latent = self.encoder(observation)
         external = latent.new_zeros((latent.shape[0], self.network.node_count))
         external[:, self.sensory_indices] = torch.tanh(self.input_mapping(latent))
-        state = self.network(external, steps=self.propagation_steps)
-        descending = state[:, self.descending_indices]
-        return self.action_readout(descending), self.value_readout(descending).squeeze(-1), state
+        next_state = self.network(external, state=state, steps=self.propagation_steps)
+        descending = next_state[:, self.descending_indices]
+        return (
+            self.action_readout(descending),
+            self.value_readout(descending).squeeze(-1),
+            next_state,
+        )
+
+    def initial_state(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        return torch.zeros(batch_size, self.network.node_count, device=device)
+
+    def forward_recurrent(
+        self, observation: torch.Tensor, state: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return self.forward_with_activity(observation, state)
 
     def act(
         self, observation: torch.Tensor, deterministic: bool = False
@@ -69,9 +81,27 @@ class ConnectomePolicy(nn.Module):
         action = logits.argmax(dim=-1) if deterministic else distribution.sample()
         return action, distribution.log_prob(action), value
 
+    def act_recurrent(
+        self,
+        observation: torch.Tensor,
+        state: torch.Tensor,
+        deterministic: bool = False,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        logits, value, next_state = self.forward_recurrent(observation, state)
+        distribution = Categorical(logits=logits)
+        action = logits.argmax(dim=-1) if deterministic else distribution.sample()
+        return action, distribution.log_prob(action), value, next_state
+
     def evaluate_actions(
         self, observation: torch.Tensor, action: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         logits, value = self(observation)
+        distribution = Categorical(logits=logits)
+        return distribution.log_prob(action), distribution.entropy(), value
+
+    def evaluate_actions_recurrent(
+        self, observation: torch.Tensor, action: torch.Tensor, state: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        logits, value, _ = self.forward_recurrent(observation, state)
         distribution = Categorical(logits=logits)
         return distribution.log_prob(action), distribution.entropy(), value

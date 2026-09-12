@@ -9,14 +9,15 @@ import torch
 from flydoom.data.controls import degree_preserving_rewire, erdos_renyi_matched
 from flydoom.data.loaders import generate_mock_connectome, load_connectome
 from flydoom.env.actions import DoomAction, action_count
-from flydoom.env.doom_env import MockDoomEnv
+from flydoom.env.doom_env import SCENARIO_CONTROLS, MockDoomEnv
 from flydoom.env.observations import FlyInspiredVisualEncoder, SimpleCNNEncoder
+from flydoom.experiments.baselines import GRUPolicy, LSTMPolicy
 from flydoom.models.connectome_network import ConnectomeRateNetwork
 from flydoom.models.graph_policy import ConnectomePolicy
 from flydoom.training.checkpoint import load_checkpoint, save_checkpoint
 from flydoom.training.ppo import PPO, PPOConfig
 from flydoom.training.rollout import RolloutBuffer
-from flydoom.training.trainer import evaluate
+from flydoom.training.trainer import evaluate, reward_summary
 
 
 def policy_for(node_count: int = 40) -> ConnectomePolicy:
@@ -66,6 +67,22 @@ def test_observation_and_action_mapping() -> None:
     assert DoomAction.SHOOT == 4
     policy = policy_for()
     assert policy.action_readout.in_features == len(policy.descending_indices)
+    assert SCENARIO_CONTROLS["basic"] == (
+        ("MOVE_LEFT", "MOVE_RIGHT", "ATTACK"),
+        ("no_op", "move_left", "move_right", "shoot"),
+    )
+
+
+def test_recurrent_baselines_carry_state_between_observations() -> None:
+    observations = torch.randint(0, 256, (1, 42, 42, 3), dtype=torch.uint8)
+    for policy_type in (GRUPolicy, LSTMPolicy):
+        policy = policy_type(16, 4)
+        state = policy.initial_state(1, torch.device("cpu"))
+        _, _, next_state = policy.forward_recurrent(observations, state)
+        _, _, later_state = policy.forward_recurrent(observations, next_state)
+        first_hidden = next_state[0] if isinstance(next_state, tuple) else next_state
+        later_hidden = later_state[0] if isinstance(later_state, tuple) else later_state
+        assert not torch.equal(first_hidden, later_hidden)
 
 
 def test_ppo_rollout_updates_policy() -> None:
@@ -84,7 +101,14 @@ def test_ppo_rollout_updates_policy() -> None:
         buffer.dones.append(index == 3)
     before = policy.action_readout.weight.detach().clone()
     metrics = algorithm.update(buffer, torch.tensor(0.0))
-    assert set(metrics) == {"policy_loss", "value_loss", "policy_entropy", "gradient_norm"}
+    assert set(metrics) == {
+        "policy_loss",
+        "value_loss",
+        "policy_entropy",
+        "gradient_norm",
+        "approx_kl",
+        "clip_fraction",
+    }
     assert not torch.equal(before, policy.action_readout.weight)
 
 
@@ -99,3 +123,6 @@ def test_checkpoint_and_deterministic_evaluation(tmp_path: Path) -> None:
     first = evaluate(MockDoomEnv(max_steps=5), restored, 2, 10, torch.device("cpu"))
     second = evaluate(MockDoomEnv(max_steps=5), restored, 2, 10, torch.device("cpu"))
     np.testing.assert_allclose(first, second)
+    summary = reward_summary(first)
+    assert summary["mean_reward"] == np.mean(first)
+    assert summary["min_reward"] <= summary["median_reward"] <= summary["max_reward"]

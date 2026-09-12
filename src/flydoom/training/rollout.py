@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 
 import torch
 
+RecurrentState = torch.Tensor | tuple[torch.Tensor, torch.Tensor]
+
 
 @dataclass
 class RolloutBuffer:
@@ -15,6 +17,7 @@ class RolloutBuffer:
     dones: list[bool] = field(default_factory=list)
     log_probs: list[torch.Tensor] = field(default_factory=list)
     values: list[torch.Tensor] = field(default_factory=list)
+    recurrent_states: list[RecurrentState] = field(default_factory=list)
 
     def advantages(
         self, last_value: torch.Tensor, gamma: float, gae_lambda: float
@@ -39,3 +42,4 @@ class RolloutBuffer:
         self.dones.clear()
         self.log_probs.clear()
         self.values.clear()
+        self.recurrent_states.clear()

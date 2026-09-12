@@ -10,6 +10,21 @@ import numpy as np
 
 from flydoom.env.actions import DoomAction, action_count
 
+SCENARIO_CONTROLS = {
+    "basic": (
+        ("MOVE_LEFT", "MOVE_RIGHT", "ATTACK"),
+        ("no_op", "move_left", "move_right", "shoot"),
+    ),
+    "defend_the_center": (
+        ("TURN_LEFT", "TURN_RIGHT", "ATTACK"),
+        ("no_op", "turn_left", "turn_right", "shoot"),
+    ),
+}
+DEFAULT_CONTROLS = (
+    ("MOVE_FORWARD", "TURN_LEFT", "TURN_RIGHT", "ATTACK"),
+    ("no_op", "move_forward", "turn_left", "turn_right", "shoot"),
+)
+
 
 class MockDoomEnv(gym.Env[np.ndarray, int]):
     """Fast visual aiming task used for tests and installation-free smoke runs."""
@@ -21,6 +36,7 @@ class MockDoomEnv(gym.Env[np.ndarray, int]):
         self.max_steps = max_steps
         self.observation_space = gym.spaces.Box(0, 255, (size, size, 3), dtype=np.uint8)
         self.action_space = gym.spaces.Discrete(action_count())
+        self.action_names = tuple(action.name.lower() for action in DoomAction)
         self.heading = 0.0
         self.target = 0.0
         self.steps = 0
@@ -99,13 +115,9 @@ class VizDoomEnv(gym.Env[np.ndarray, int]):
         self.vzd = vzd
         self.game = vzd.DoomGame()
         self.game.load_config(str(config_path))
+        button_names, self.action_names = SCENARIO_CONTROLS.get(scenario, DEFAULT_CONTROLS)
+        self.buttons = tuple(getattr(vzd.Button, name) for name in button_names)
         self.game.clear_available_buttons()
-        self.buttons = [
-            vzd.Button.MOVE_FORWARD,
-            vzd.Button.TURN_LEFT,
-            vzd.Button.TURN_RIGHT,
-            vzd.Button.ATTACK,
-        ]
         for button in self.buttons:
             self.game.add_available_button(button)
         self.game.set_screen_format(vzd.ScreenFormat.RGB24)
@@ -118,7 +130,7 @@ class VizDoomEnv(gym.Env[np.ndarray, int]):
         self.steps = 0
         self.last_frame = np.zeros((size, size, 3), dtype=np.uint8)
         self.observation_space = gym.spaces.Box(0, 255, (size, size, 3), dtype=np.uint8)
-        self.action_space = gym.spaces.Discrete(action_count())
+        self.action_space = gym.spaces.Discrete(len(self.action_names))
 
     def _resize(self, frame: np.ndarray) -> np.ndarray:
         y = np.linspace(0, frame.shape[0] - 1, self.size).astype(int)
@@ -153,14 +165,8 @@ class VizDoomEnv(gym.Env[np.ndarray, int]):
         if not self.action_space.contains(action):
             raise ValueError(f"Invalid action: {action}")
         command = [False] * len(self.buttons)
-        if action != DoomAction.NO_OP:
-            button_index = {
-                DoomAction.MOVE_FORWARD: 0,
-                DoomAction.TURN_LEFT: 1,
-                DoomAction.TURN_RIGHT: 2,
-                DoomAction.SHOOT: 3,
-            }[DoomAction(action)]
-            command[button_index] = True
+        if action:
+            command[action - 1] = True
         reward = float(self.game.make_action(command, self.frame_skip))
         self.steps += 1
         terminated = self.game.is_episode_finished()

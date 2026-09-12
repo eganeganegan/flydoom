@@ -32,7 +32,7 @@ from flydoom.models.connectome_network import ConnectomeRateNetwork
 from flydoom.models.graph_policy import ConnectomePolicy
 from flydoom.training.checkpoint import save_checkpoint
 from flydoom.training.ppo import PPO, PPOConfig
-from flydoom.training.trainer import evaluate, train
+from flydoom.training.trainer import evaluate, reward_summary, train
 from flydoom.visualization.learning_curves import plot_learning_curves
 from flydoom.visualization.recording import record_episode
 
@@ -109,7 +109,10 @@ def load_graph(config: dict[str, Any]) -> ConnectomeGraph:
 
 
 def build_connectome_policy(
-    graph: ConnectomeGraph, config: dict[str, Any], device: torch.device
+    graph: ConnectomeGraph,
+    config: dict[str, Any],
+    device: torch.device,
+    num_actions: int | None = None,
 ) -> ConnectomePolicy:
     edge_index, weights = graph.sparse_tensors()
     model = config["model"]
@@ -148,7 +151,7 @@ def build_connectome_policy(
         network,
         sensory,
         descending,
-        action_count(),
+        num_actions or action_count(),
         encoder=str(model.get("encoder", "cnn")),
         propagation_steps=int(model.get("propagation_steps", 5)),
         training_mode=str(model.get("training_mode", "trainable_internal")),
@@ -157,6 +160,20 @@ def build_connectome_policy(
 
 def parameter_count(model: torch.nn.Module, trainable_only: bool = False) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad or not trainable_only)
+
+
+def trainable_snapshot(model: torch.nn.Module) -> list[torch.Tensor]:
+    return [
+        parameter.detach().clone() for parameter in model.parameters() if parameter.requires_grad
+    ]
+
+
+def parameter_change_norm(model: torch.nn.Module, before: list[torch.Tensor]) -> float:
+    after = [parameter.detach() for parameter in model.parameters() if parameter.requires_grad]
+    squared_change = sum(
+        (current - initial).square().sum() for current, initial in zip(after, before, strict=True)
+    )
+    return float(squared_change.sqrt())
 
 
 def ppo_config(training: dict[str, Any]) -> PPOConfig:
@@ -184,9 +201,14 @@ def main(arguments: list[str] | None = None) -> Path:
     graph = load_graph(config)
     LOGGER.info("Graph: %d neurons, %d real directed edges", graph.node_count, graph.edge_count)
 
-    run_dir = (
+    base_run_dir = (
         Path(config["output"]["root"]) / date.today().isoformat() / f"fly_connectome_seed_{seed}"
     )
+    run_dir = base_run_dir
+    run_number = 2
+    while run_dir.exists():
+        run_dir = base_run_dir.with_name(f"{base_run_dir.name}_run_{run_number}")
+        run_number += 1
     run_dir.mkdir(parents=True, exist_ok=True)
     config.update(
         seed=seed,
@@ -214,19 +236,35 @@ def main(arguments: list[str] | None = None) -> Path:
     comparisons: list[dict[str, Any]] = []
     for name in requested_variants:
         set_seed(seed)
+        env = make_environment(config["env"])
+        num_actions = int(env.action_space.n)
         variant = graph_variants.get(name)
         if variant is not None:
-            policy = build_connectome_policy(variant, config, device)
+            policy = build_connectome_policy(variant, config, device, num_actions)
         else:
             hidden = int(config["model"].get("baseline_hidden_size", 128))
             policies = {"mlp": MLPPolicy, "gru": GRUPolicy, "lstm": LSTMPolicy}
             if name not in policies:
                 raise ValueError(f"Unknown experiment variant: {name}")
-            policy = policies[name](hidden, action_count()).to(device)
-        algorithm = PPO(policy, ppo_config(config["training"]))
+            policy = policies[name](hidden, num_actions).to(device)
         model_dir = run_dir / name
         model_dir.mkdir(exist_ok=True)
-        env = make_environment(config["env"])
+        before = trainable_snapshot(policy)
+        evaluation_episodes = int(config["experiment"]["evaluation_episodes"])
+        initial_evaluation_env = make_environment(config["env"])
+        initial_rewards = evaluate(
+            initial_evaluation_env,
+            policy,
+            evaluation_episodes,
+            seed + 10_000,
+            device,
+        )
+        initial_evaluation_env.close()
+        initial_evaluation = reward_summary(initial_rewards)
+        (model_dir / "evaluation-before-training.json").write_text(
+            json.dumps(initial_evaluation, indent=2)
+        )
+        algorithm = PPO(policy, ppo_config(config["training"]))
         rows = train(
             env,
             algorithm,
@@ -258,11 +296,11 @@ def main(arguments: list[str] | None = None) -> Path:
         rewards = evaluate(
             evaluation_env,
             policy,
-            int(config["experiment"]["evaluation_episodes"]),
+            evaluation_episodes,
             seed + 10_000,
             device,
         )
-        evaluation = {"rewards": rewards, "mean_reward": float(np.mean(rewards))}
+        evaluation = reward_summary(rewards)
         (model_dir / "evaluation.json").write_text(json.dumps(evaluation, indent=2))
         if name == "real_connectome" and config["output"].get("record_activity", True):
             trace_env = make_environment(config["env"])
@@ -278,6 +316,11 @@ def main(arguments: list[str] | None = None) -> Path:
                 "graph_neurons": variant.node_count if variant else 0,
                 "graph_edges": variant.edge_count if variant else 0,
                 "final_evaluation_reward": evaluation["mean_reward"],
+                "initial_evaluation_reward": initial_evaluation["mean_reward"],
+                "evaluation_improvement": (
+                    evaluation["mean_reward"] - initial_evaluation["mean_reward"]
+                ),
+                "parameter_change_norm": parameter_change_norm(policy, before),
                 "training_reward_auc": float(
                     np.trapezoid(metrics.episodic_reward, metrics.environment_steps)
                 ),

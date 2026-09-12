@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#031315" />
+    <title>FlyDoom Neural Cinema</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar glass">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">MALE CNS · LIVE CONNECTOME</p>
+            <h1 id="session-title">FlyDoom Neural Cinema</h1>
+          </div>
+        </div>
+        <div class="legend" aria-label="Activity legend">
+          <span><i class="dot resting"></i>resting</span>
+          <span><i class="dot active"></i>stimulated</span>
+          <span><i class="dot firing"></i>firing</span>
+        </div>
+        <button id="fullscreen" class="icon-button" title="Fullscreen">⛶</button>
+      </header>
+
+      <main id="viewport" aria-label="Three-dimensional neural activity viewer"></main>
+
+      <aside class="metrics glass">
+        <div><span>NEURONS</span><strong id="node-count">—</strong></div>
+        <div><span>EDGES</span><strong id="edge-count">—</strong></div>
+        <div><span>SYNAPSES</span><strong id="synapse-count">—</strong></div>
+        <div><span>FRAME</span><strong id="frame-label">—</strong></div>
+      </aside>
+
+      <section class="focus-card glass">
+        <p class="eyebrow">PEAK ACTIVITY</p>
+        <strong id="peak-type">—</strong>
+        <span id="peak-meta">waiting for data</span>
+        <div class="activity-meter"><i id="activity-fill"></i></div>
+      </section>
+
+      <section class="doom-card glass">
+        <div class="card-heading">
+          <span>AGENT VISION</span>
+          <span id="action-label" class="pill">—</span>
+        </div>
+        <canvas id="doom-frame"></canvas>
+        <div class="reward-row">
+          <span>instant reward</span>
+          <strong id="reward-label">—</strong>
+        </div>
+      </section>
+
+      <section class="controls glass">
+        <button id="play" class="play-button" aria-label="Play or pause">▶</button>
+        <div class="timeline-wrap">
+          <div class="timeline-labels">
+            <span id="time-current">00:00.00</span>
+            <span id="time-total">00:00.00</span>
+          </div>
+          <input id="timeline" type="range" min="0" max="1" value="0" step="1" />
+        </div>
+        <label class="control-field">
+          <span>SPEED</span>
+          <select id="speed">
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+        </label>
+        <label class="control-field threshold-field">
+          <span>ACTIVITY GAIN</span>
+          <input id="gain" type="range" min="0.25" max="4" value="1.25" step="0.05" />
+        </label>
+        <button id="orbit" class="toggle active">AUTO ORBIT</button>
+        <button id="morphology" class="toggle active">MORPHOLOGY</button>
+      </section>
+
+      <div id="loading" class="loading-screen">
+        <div class="fly-loader"><i></i><i></i><i></i></div>
+        <p id="loading-message">Loading connectome session…</p>
+        <small>WebGL neural cinema</small>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

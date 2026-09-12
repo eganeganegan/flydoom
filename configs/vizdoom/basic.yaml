@@ -3,3 +3,5 @@ env:
   scenario: basic
   frame_skip: 4
   max_episode_steps: 2100
+training:
+  reward_scale: 0.01

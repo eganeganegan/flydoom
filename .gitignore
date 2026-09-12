@@ -13,3 +13,6 @@ data/processed/*
 outputs/
 results/
 .vscode/
+viewer/node_modules/
+viewer/dist/
+viewer/public/session/

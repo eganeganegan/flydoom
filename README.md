@@ -13,7 +13,7 @@ This is not Doom running in a biological brain, a whole-brain simulation, or a c
 - Fixed internal weights, trainable internal weights, or trainable-readout-only modes.
 - Optional neurotransmitter sign constraints; unknown/context-dependent signs remain unconstrained.
 - CNN and fly-inspired visual encoders.
-- A five-action VizDoom interface: no-op, forward, turn left, turn right, shoot.
+- Scenario-native four-action VizDoom interfaces with no-op and shoot.
 - PPO training, deterministic evaluation, seeding, checkpoints, CSV metrics, and comparison plots.
 - topology, matched Erdős–Rényi, degree-preserving rewiring, MLP, GRU, and LSTM controls.
 - Synchronized Doom-frame/model-activity/action/reward traces.
@@ -156,16 +156,59 @@ python scripts/train.py \
   device=cuda seed=42 training.total_steps=1000000
 ```
 
-Use `vizdoom=defend_the_center` for the alternate scenario. Configuration groups are ordinary YAML in `configs/`; dotted `key=value` arguments override them. By default one seed trains all required variants: `real_connectome`, `erdos_renyi`, `degree_rewired`, `mlp`, `gru`, and `lstm`. Run multiple seeds before drawing scientific conclusions.
+The `basic` environment uses the scenario's native actions: no-op, move left, move
+right, and shoot. `defend_the_center` instead uses no-op, turn left, turn right, and
+shoot. Both VizDoom groups scale rewards by `0.01` during optimization while reporting
+unscaled episode rewards.
 
-Each run logs reward, episode length, kills, survival time, policy/value losses, entropy, gradient norm, FPS, graph size, total/trainable parameter counts, resolved configuration, source fingerprint, final checkpoints, deterministic evaluations, reward AUC, and a learning curve. Inspect results with:
+Use `vizdoom=defend_the_center` for the alternate scenario. Configuration groups are ordinary YAML in `configs/`; dotted `key=value` arguments override them. By default one seed trains all required variants: `real_connectome`, `erdos_renyi`, `degree_rewired`, `mlp`, `gru`, and `lstm`. The connectome, GRU, and LSTM policies carry recurrent state between observations and reset it at episode boundaries. Run multiple seeds before drawing scientific conclusions.
+
+Each run logs reward, episode length, kills, survival time, policy/value losses, entropy, gradient norm, approximate KL, clipping fraction, per-action frequencies, FPS, graph size, total/trainable parameter counts, parameter-change norm, paired before/after deterministic evaluations, reward AUC, resolved configuration, source fingerprint, final checkpoints, and a learning curve. A repeat with the same date and seed is written to a numbered run directory instead of overwriting the previous run. Inspect results with:
 
 ```bash
 python scripts/evaluate.py outputs/YYYY-MM-DD/fly_connectome_seed_42
 python scripts/evaluate.py outputs/YYYY-MM-DD/fly_connectome_seed_42 --rerun --episodes 10
 ```
 
-## Activity player and export
+## WebGL neural cinema
+
+The primary activity viewer is a browser-based Three.js application. It avoids WSL/X11
+rendering problems and adds GPU bloom, live activity shaders, orbit controls, a Doom
+picture-in-picture feed, metrics, scrubbing, playback speed, activity gain, and
+fullscreen mode. Node.js `20.19+` (or `22.12+`) is required by the pinned Vite version.
+
+Export a recorded trace together with the exact graph used by the policy:
+
+```bash
+python scripts/export_web_viewer.py \
+  outputs/.../real_connectome/episode_trace.npz \
+  --graph data/processed/visual-descending.pt \
+  --output viewer/public/session
+
+cd viewer
+npm install
+npm run dev -- --host 0.0.0.0
+```
+
+Open `http://localhost:5173` in the Windows browser. Drag to orbit, scroll to zoom,
+Space plays or pauses, Left/Right steps through frames, and the bottom controls adjust
+speed, activity gain, auto-orbit, morphology, and fullscreen. The exporter writes
+compact typed-array binaries rather than embedding a large trace in JSON.
+
+Without skeleton files, the viewer renders the real graph layout and connectome edges.
+For anatomical neurites like the reference visualization, add the official SWC folder:
+
+```bash
+python scripts/export_web_viewer.py \
+  outputs/.../real_connectome/episode_trace.npz \
+  --graph data/processed/visual-descending.pt \
+  --skeleton-dir data/raw/skeletons-swc \
+  --output viewer/public/session
+```
+
+Run `npm run build` to create a deployable static build in `viewer/dist/`.
+
+## Desktop activity player and export
 
 Training records `real_connectome/episode_trace.npz`. Open it with:
 

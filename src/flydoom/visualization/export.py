@@ -10,7 +10,6 @@ import numpy as np
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt  # noqa: E402
 
-from flydoom.env.actions import ACTION_NAMES  # noqa: E402
 from flydoom.visualization.player import render_brain_image  # noqa: E402
 from flydoom.visualization.trace import EpisodeTrace  # noqa: E402
 
@@ -40,7 +39,7 @@ def compose_frame(
     footer.set_facecolor("#020b0d")
     footer.axis("off")
     action = int(trace.actions[index])
-    action_name = ACTION_NAMES[action] if 0 <= action < len(ACTION_NAMES) else str(action)
+    action_name = trace.action_name(action)
     footer.text(
         0.02,
         0.5,

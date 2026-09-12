@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 
-from flydoom.env.actions import ACTION_NAMES
 from flydoom.visualization.layout import load_swc
 from flydoom.visualization.trace import EpisodeTrace
 
@@ -195,7 +194,7 @@ class ActivityPlayer:
         texture = self.pv.numpy_to_texture(self.trace.frames[self.index])
         self.frame_actor.SetTexture(texture)
         action = int(self.trace.actions[self.index])
-        name = ACTION_NAMES[action] if 0 <= action < len(ACTION_NAMES) else str(action)
+        name = self.trace.action_name(action)
         self.status.set_text(
             "lower_left",
             f"t={self.index / self.trace.fps:6.2f}s   action={name}   "

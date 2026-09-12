@@ -28,11 +28,12 @@ def record_episode(
     activity: list[np.ndarray] = []
     actions: list[int] = []
     rewards: list[float] = []
+    state = policy.initial_state(1, device)
     done = False
     while not done:
         tensor = observation_tensor(observation, device)
         with torch.no_grad():
-            logits, _, state = policy.forward_with_activity(tensor)
+            logits, _, state = policy.forward_with_activity(tensor, state)
             action = int(logits.argmax(dim=-1).item())
         next_observation, reward, terminated, truncated, _ = env.step(action)
         frames.append(np.asarray(observation).copy())
@@ -52,4 +53,5 @@ def record_episode(
         neurons["region"].fillna("unknown").astype(str).to_numpy(),
         neurons["type"].fillna("unknown").astype(str).to_numpy(),
         fps,
+        np.asarray(getattr(env, "action_names", ())),
     )
