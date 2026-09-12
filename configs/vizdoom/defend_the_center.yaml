@@ -1,0 +1,5 @@
+env:
+  backend: vizdoom
+  scenario: defend_the_center
+  frame_skip: 4
+  max_episode_steps: 2100

@@ -1,0 +1,7 @@
+data:
+  kind: processed
+  path: data/processed/visual-descending.pt
+  min_synapses: 1
+  max_neurons: 5000
+  num_hops: 8
+  shortest_path_union: false

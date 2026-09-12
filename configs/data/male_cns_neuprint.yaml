@@ -1,0 +1,11 @@
+data:
+  kind: neuprint
+  types: ["R1-6.*"]
+  classes: null
+  regions: null
+  body_ids: null
+  target_class: descending
+  min_synapses: 3
+  max_neurons: 5000
+  num_hops: 4
+  shortest_path_union: true
