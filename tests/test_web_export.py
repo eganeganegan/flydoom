@@ -38,6 +38,13 @@ def test_web_session_exports_compact_aligned_binary_data(tmp_path) -> None:
         regions=np.asarray(["LO", "PVLP", "GNG"]),
         types=np.asarray(["LC4", "PVLP024", "DNp04"]),
         action_names=np.asarray(["no_op", "move_left", "move_right", "shoot"]),
+        health=np.asarray([100.0, 80.0]),
+        ammo=np.asarray([50.0, 49.0]),
+        kills=np.asarray([0.0, 1.0]),
+        action_values=np.zeros((2, 4), dtype=np.float32),
+        reward_components=np.asarray([[0.0, -0.01], [10.0, -1.0]], dtype=np.float32),
+        reward_component_names=np.asarray(["kill", "damage_taken"]),
+        learning_mode="three_factor",
     )
 
     manifest_path = export_web_session(trace, graph, tmp_path / "session")
@@ -49,3 +56,9 @@ def test_web_session_exports_compact_aligned_binary_data(tmp_path) -> None:
     assert manifest_path.with_name(manifest["files"]["activity"]).stat().st_size == 2 * 3 * 4
     kinds = np.fromfile(manifest_path.with_name(manifest["files"]["node_kind"]), dtype=np.uint8)
     assert kinds.tolist() == [1, 0, 2]
+    telemetry = np.fromfile(
+        manifest_path.with_name(manifest["files"]["telemetry"]), dtype=np.float32
+    ).reshape(2, 3)
+    assert telemetry.tolist() == [[100.0, 50.0, 0.0], [80.0, 49.0, 1.0]]
+    assert manifest["reward_component_names"] == ["kill", "damage_taken"]
+    assert manifest["learning_mode"] == "three_factor"

@@ -1,0 +1,11 @@
+model:
+  kind: connectome_rate
+  encoder: fly
+  leak: 0.5
+  weight_scale: 0.05
+  training_mode: three_factor
+  normalize_incoming: true
+  sign_constraints: true
+  activation: tanh
+  propagation_steps: 5
+  baseline_hidden_size: 128

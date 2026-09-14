@@ -32,7 +32,12 @@ from flydoom.models.connectome_network import ConnectomeRateNetwork
 from flydoom.models.graph_policy import ConnectomePolicy
 from flydoom.training.checkpoint import save_checkpoint
 from flydoom.training.ppo import PPO, PPOConfig
-from flydoom.training.trainer import evaluate, reward_summary, train
+from flydoom.training.three_factor import (
+    ThreeFactorConfig,
+    ThreeFactorLearner,
+    train_three_factor,
+)
+from flydoom.training.trainer import evaluate_detailed, evaluation_summary, train
 from flydoom.visualization.learning_curves import plot_learning_curves
 from flydoom.visualization.recording import record_episode
 
@@ -162,23 +167,56 @@ def parameter_count(model: torch.nn.Module, trainable_only: bool = False) -> int
     return sum(p.numel() for p in model.parameters() if p.requires_grad or not trainable_only)
 
 
-def trainable_snapshot(model: torch.nn.Module) -> list[torch.Tensor]:
-    return [
-        parameter.detach().clone() for parameter in model.parameters() if parameter.requires_grad
-    ]
+def parameter_snapshot(
+    model: torch.nn.Module, *, trainable_only: bool = True
+) -> dict[str, torch.Tensor]:
+    return {
+        name: parameter.detach().clone()
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad or not trainable_only
+    }
 
 
-def parameter_change_norm(model: torch.nn.Module, before: list[torch.Tensor]) -> float:
-    after = [parameter.detach() for parameter in model.parameters() if parameter.requires_grad]
+def parameter_change_norm(
+    model: torch.nn.Module, before: dict[str, torch.Tensor]
+) -> float:
     squared_change = sum(
-        (current - initial).square().sum() for current, initial in zip(after, before, strict=True)
+        (parameter.detach() - before[name]).square().sum()
+        for name, parameter in model.named_parameters()
+        if name in before
     )
-    return float(squared_change.sqrt())
+    return float(torch.as_tensor(squared_change).sqrt())
 
 
 def ppo_config(training: dict[str, Any]) -> PPOConfig:
     names = set(PPOConfig.__dataclass_fields__)
     return PPOConfig(**{key: value for key, value in training.items() if key in names})
+
+
+def edge_plasticity_mask(
+    graph: ConnectomeGraph, scope: str, device: torch.device
+) -> torch.Tensor:
+    """Select locally plastic edges without changing the anatomical edge set."""
+    if scope == "all":
+        return torch.ones(graph.edge_count, dtype=torch.bool, device=device)
+    if scope != "mushroom_body":
+        raise ValueError(f"Unknown plasticity scope: {scope}")
+    labels = graph.neurons[["type", "class", "region"]].astype(str).agg(" ".join, axis=1)
+    kenyon = labels.str.contains(r"\bKC\b|Kenyon", case=False, regex=True)
+    output = labels.str.contains(r"\bMBON\b|mushroom body output", case=False, regex=True)
+    source_is_kenyon = graph.edges["pre_body_id"].map(
+        graph.neurons.assign(selected=kenyon).set_index("body_id")["selected"]
+    )
+    target_is_output = graph.edges["post_body_id"].map(
+        graph.neurons.assign(selected=output).set_index("body_id")["selected"]
+    )
+    mask = (source_is_kenyon.fillna(False) & target_is_output.fillna(False)).to_numpy()
+    if not mask.any():
+        raise ValueError(
+            "plasticity_scope=mushroom_body found no KC→MBON edges; rebuild the subgraph "
+            "with Kenyon cells and mushroom-body output neurons or use scope=all"
+        )
+    return torch.as_tensor(mask, dtype=torch.bool, device=device)
 
 
 def main(arguments: list[str] | None = None) -> Path:
@@ -234,6 +272,9 @@ def main(arguments: list[str] | None = None) -> Path:
         graph_variants["degree_rewired"] = degree_preserving_rewire(graph, seed + 2)
     all_metrics: list[pd.DataFrame] = []
     comparisons: list[dict[str, Any]] = []
+    algorithm_name = str(config["training"].get("algorithm", "ppo"))
+    if algorithm_name not in {"ppo", "three_factor"}:
+        raise ValueError(f"Unknown training algorithm: {algorithm_name}")
     for name in requested_variants:
         set_seed(seed)
         env = make_environment(config["env"])
@@ -249,10 +290,10 @@ def main(arguments: list[str] | None = None) -> Path:
             policy = policies[name](hidden, num_actions).to(device)
         model_dir = run_dir / name
         model_dir.mkdir(exist_ok=True)
-        before = trainable_snapshot(policy)
+        before = parameter_snapshot(policy, trainable_only=algorithm_name != "three_factor")
         evaluation_episodes = int(config["experiment"]["evaluation_episodes"])
         initial_evaluation_env = make_environment(config["env"])
-        initial_rewards = evaluate(
+        initial_episodes = evaluate_detailed(
             initial_evaluation_env,
             policy,
             evaluation_episodes,
@@ -260,19 +301,60 @@ def main(arguments: list[str] | None = None) -> Path:
             device,
         )
         initial_evaluation_env.close()
-        initial_evaluation = reward_summary(initial_rewards)
+        initial_evaluation = evaluation_summary(initial_episodes)
         (model_dir / "evaluation-before-training.json").write_text(
             json.dumps(initial_evaluation, indent=2)
         )
-        algorithm = PPO(policy, ppo_config(config["training"]))
-        rows = train(
-            env,
-            algorithm,
-            total_steps=int(config["training"]["total_steps"]),
-            rollout_steps=int(config["training"]["rollout_steps"]),
-            seed=seed,
-            device=device,
-        )
+        plastic_edges = 0
+        if algorithm_name == "three_factor":
+            if variant is None:
+                raise ValueError("three_factor learning requires a connectome graph variant")
+            dopamine_indices = torch.tensor(
+                variant.neurons.index[
+                    variant.neurons["neurotransmitter"]
+                    .astype(str)
+                    .str.lower()
+                    .eq("dopamine")
+                ].tolist(),
+                dtype=torch.long,
+                device=device,
+            )
+            if not len(dopamine_indices):
+                LOGGER.warning(
+                    "No dopaminergic neurons are present in this subgraph; the reward "
+                    "prediction error will be broadcast directly to eligible synapses"
+                )
+            learner = ThreeFactorLearner(
+                policy,
+                ThreeFactorConfig.from_mapping(config["training"]),
+                edge_plasticity_mask=edge_plasticity_mask(
+                    variant,
+                    str(config["training"].get("plasticity_scope", "all")),
+                    device,
+                ),
+                dopamine_indices=dopamine_indices,
+            )
+            plastic_edges = learner.plastic_edge_count
+            rows = train_three_factor(
+                env,
+                learner,
+                total_steps=int(config["training"]["total_steps"]),
+                report_interval=int(config["training"]["rollout_steps"]),
+                seed=seed,
+                device=device,
+            )
+            optimizer = None
+        else:
+            algorithm = PPO(policy, ppo_config(config["training"]))
+            rows = train(
+                env,
+                algorithm,
+                total_steps=int(config["training"]["total_steps"]),
+                rollout_steps=int(config["training"]["rollout_steps"]),
+                seed=seed,
+                device=device,
+            )
+            optimizer = algorithm.optimizer
         metrics = pd.DataFrame(rows)
         metrics.insert(0, "model", name)
         metrics["graph_neurons"] = variant.node_count if variant else 0
@@ -283,24 +365,29 @@ def main(arguments: list[str] | None = None) -> Path:
         save_checkpoint(
             model_dir / "checkpoint.pt",
             policy,
-            algorithm.optimizer,
+            optimizer,
             {
                 "seed": seed,
                 "model": name,
                 "environment_steps": config["training"]["total_steps"],
                 "graph_neurons": variant.node_count if variant else 0,
                 "graph_edges": variant.edge_count if variant else 0,
+                "training_algorithm": algorithm_name,
+                "plastic_edges": plastic_edges,
+                "dopamine_neurons": (
+                    learner.dopamine_neuron_count if algorithm_name == "three_factor" else 0
+                ),
             },
         )
         evaluation_env = make_environment(config["env"])
-        rewards = evaluate(
+        evaluated_episodes = evaluate_detailed(
             evaluation_env,
             policy,
             evaluation_episodes,
             seed + 10_000,
             device,
         )
-        evaluation = reward_summary(rewards)
+        evaluation = evaluation_summary(evaluated_episodes)
         (model_dir / "evaluation.json").write_text(json.dumps(evaluation, indent=2))
         if name == "real_connectome" and config["output"].get("record_activity", True):
             trace_env = make_environment(config["env"])
@@ -311,11 +398,19 @@ def main(arguments: list[str] | None = None) -> Path:
         comparisons.append(
             {
                 "model": name,
+                "training_algorithm": algorithm_name,
                 "parameters": parameter_count(policy),
                 "trainable_parameters": parameter_count(policy, True),
                 "graph_neurons": variant.node_count if variant else 0,
                 "graph_edges": variant.edge_count if variant else 0,
+                "plastic_edges": plastic_edges,
+                "dopamine_neurons": (
+                    learner.dopamine_neuron_count if algorithm_name == "three_factor" else 0
+                ),
                 "final_evaluation_reward": evaluation["mean_reward"],
+                "final_success_rate": evaluation["success_rate"],
+                "final_mean_kills": evaluation["mean_kills"],
+                "final_mean_damage_taken": evaluation["mean_damage_taken"],
                 "initial_evaluation_reward": initial_evaluation["mean_reward"],
                 "evaluation_improvement": (
                     evaluation["mean_reward"] - initial_evaluation["mean_reward"]

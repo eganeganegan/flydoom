@@ -1,0 +1,20 @@
+experiment:
+  name: flydoom_learn
+  variants: [real_connectome]
+  evaluation_episodes: 30
+training:
+  total_steps: 3000000
+  rollout_steps: 512
+  learning_rate: 0.00025
+  gamma: 0.995
+  gae_lambda: 0.95
+  clip_range: 0.2
+  entropy_coef: 0.015
+  value_coef: 0.5
+  max_grad_norm: 0.5
+  epochs: 4
+  batch_size: 128
+output:
+  root: outputs
+  tensorboard: false
+  record_activity: true

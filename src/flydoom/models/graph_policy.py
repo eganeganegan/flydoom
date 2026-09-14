@@ -36,15 +36,24 @@ class ConnectomePolicy(nn.Module):
         self.action_readout = nn.Linear(len(descending_indices), action_count)
         self.value_readout = nn.Linear(len(descending_indices), 1)
         self.propagation_steps = propagation_steps
-        if training_mode not in {"trainable_internal", "fixed_internal", "readout_only"}:
+        self.training_mode = training_mode
+        if training_mode not in {
+            "trainable_internal",
+            "fixed_internal",
+            "readout_only",
+            "three_factor",
+        }:
             raise ValueError(f"Unknown training mode: {training_mode}")
-        if training_mode in {"fixed_internal", "readout_only"}:
+        if training_mode in {"fixed_internal", "readout_only", "three_factor"}:
             self.network.edge_weight.requires_grad_(False)
             self.network.bias.requires_grad_(False)
         if training_mode == "readout_only":
             for module in (self.encoder, self.input_mapping):
                 for parameter in module.parameters():
                     parameter.requires_grad_(False)
+        if training_mode == "three_factor":
+            for parameter in self.parameters():
+                parameter.requires_grad_(False)
 
     def forward(self, observation: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         logits, value, _ = self.forward_with_activity(observation)

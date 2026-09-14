@@ -9,6 +9,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 
+from flydoom.env.rewards import REWARD_COMPONENT_NAMES
 from flydoom.training.ppo import PPO
 from flydoom.training.rollout import RecurrentState, RolloutBuffer
 
@@ -32,6 +33,18 @@ def reward_summary(rewards: list[float]) -> dict[str, Any]:
     }
 
 
+def evaluation_summary(episodes: list[dict[str, float]]) -> dict[str, Any]:
+    """Summarize reward and task outcomes for a deterministic evaluation set."""
+    if not episodes:
+        raise ValueError("At least one evaluation episode is required")
+    summary = reward_summary([episode["reward"] for episode in episodes])
+    for name in ("kills", "hits", "damage_taken", "deaths", "survival_time"):
+        summary[f"mean_{name}"] = float(np.mean([episode[name] for episode in episodes]))
+    summary["success_rate"] = float(np.mean([episode["kills"] > 0 for episode in episodes]))
+    summary["episodes"] = episodes
+    return summary
+
+
 def _detach_state(state: RecurrentState) -> RecurrentState:
     if isinstance(state, tuple):
         return state[0].detach(), state[1].detach()
@@ -50,6 +63,7 @@ def train(
     observation, _ = env.reset(seed=seed)
     episode_reward = 0.0
     episode_length = 0
+    episode_components = {name: 0.0 for name in REWARD_COMPONENT_NAMES}
     rows: list[dict[str, Any]] = []
     started = time.perf_counter()
     completed_steps = 0
@@ -78,6 +92,9 @@ def train(
             completed_steps += 1
             episode_reward += float(reward)
             episode_length += 1
+            for name, value in info.get("reward_components", {}).items():
+                if name in episode_components:
+                    episode_components[name] += float(value)
             observation = next_observation
             if done:
                 rows.append(
@@ -86,8 +103,18 @@ def train(
                         "episodic_reward": episode_reward,
                         "episode_length": episode_length,
                         "kills": info.get("kills", 0),
+                        "hits": info.get("hits", 0),
+                        "health": info.get("health", np.nan),
+                        "ammo": info.get("ammo", np.nan),
+                        "damage_taken": info.get("damage_taken", 0),
+                        "deaths": info.get("deaths", 0),
                         "survival_time": info.get("survival_time", episode_length),
                         "distance_travelled": info.get("distance_travelled", 0.0),
+                        "episode_dopamine": episode_reward,
+                        **{
+                            f"reward_component_{name}": value
+                            for name, value in episode_components.items()
+                        },
                     }
                 )
                 observation, _ = env.reset()
@@ -95,6 +122,7 @@ def train(
                     state = algorithm.policy.initial_state(1, device)
                 episode_reward = 0.0
                 episode_length = 0
+                episode_components = {name: 0.0 for name in REWARD_COMPONENT_NAMES}
         with torch.no_grad():
             tensor = observation_tensor(observation, device)
             if state is None:
@@ -110,8 +138,18 @@ def train(
                     "episodic_reward": episode_reward,
                     "episode_length": episode_length,
                     "kills": 0,
+                    "hits": info.get("hits", 0),
+                    "health": info.get("health", np.nan),
+                    "ammo": info.get("ammo", np.nan),
+                    "damage_taken": info.get("damage_taken", 0),
+                    "deaths": info.get("deaths", 0),
                     "survival_time": episode_length,
                     "distance_travelled": 0.0,
+                    "episode_dopamine": episode_reward,
+                    **{
+                        f"reward_component_{name}": value
+                        for name, value in episode_components.items()
+                    },
                 }
             )
         rows[-1].update(losses)
@@ -124,20 +162,22 @@ def train(
     return rows
 
 
-def evaluate(
+def evaluate_detailed(
     env: gym.Env[np.ndarray, int],
     policy: torch.nn.Module,
     episodes: int,
     seed: int,
     device: torch.device,
-) -> list[float]:
-    rewards: list[float] = []
+) -> list[dict[str, float]]:
+    results: list[dict[str, float]] = []
     for episode in range(episodes):
         observation, _ = env.reset(seed=seed + episode)
         recurrent = hasattr(policy, "initial_state")
         state = policy.initial_state(1, device) if recurrent else None
         done = False
         total = 0.0
+        final_info: dict[str, Any] = {}
+        steps = 0
         while not done:
             with torch.no_grad():
                 tensor = observation_tensor(observation, device)
@@ -147,8 +187,34 @@ def evaluate(
                     action, _, _, state = policy.act_recurrent(
                         tensor, state, deterministic=True
                     )
-            observation, reward, terminated, truncated, _ = env.step(int(action.item()))
+            observation, reward, terminated, truncated, final_info = env.step(
+                int(action.item())
+            )
             done = terminated or truncated
             total += float(reward)
-        rewards.append(total)
-    return rewards
+            steps += 1
+        results.append(
+            {
+                "reward": total,
+                "kills": float(final_info.get("kills", 0.0)),
+                "hits": float(final_info.get("hits", 0.0)),
+                "damage_taken": float(final_info.get("damage_taken", 0.0)),
+                "deaths": float(final_info.get("deaths", 0.0)),
+                "survival_time": float(final_info.get("survival_time", steps)),
+            }
+        )
+    return results
+
+
+def evaluate(
+    env: gym.Env[np.ndarray, int],
+    policy: torch.nn.Module,
+    episodes: int,
+    seed: int,
+    device: torch.device,
+) -> list[float]:
+    """Compatibility wrapper returning only episode reward totals."""
+    return [
+        episode["reward"]
+        for episode in evaluate_detailed(env, policy, episodes, seed, device)
+    ]

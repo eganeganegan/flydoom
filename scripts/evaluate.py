@@ -16,7 +16,7 @@ from flydoom.data.controls import degree_preserving_rewire, erdos_renyi_matched
 from flydoom.env.doom_env import make_environment
 from flydoom.experiments.baselines import GRUPolicy, LSTMPolicy, MLPPolicy
 from flydoom.training.checkpoint import load_checkpoint
-from flydoom.training.trainer import evaluate, reward_summary
+from flydoom.training.trainer import evaluate_detailed, evaluation_summary
 
 
 def inspect(run_dir: Path) -> None:
@@ -51,11 +51,14 @@ def rerun(run_dir: Path, episodes: int, device: torch.device, seed: int) -> None
             policies = {"mlp": MLPPolicy, "gru": GRUPolicy, "lstm": LSTMPolicy}
             policy = policies[name](hidden, num_actions).to(device)
         load_checkpoint(checkpoint, policy, map_location=device)
-        rewards = evaluate(env, policy, episodes, seed, device)
+        evaluated_episodes = evaluate_detailed(env, policy, episodes, seed, device)
         env.close()
-        result = {**reward_summary(rewards), "seed": seed}
+        result = {**evaluation_summary(evaluated_episodes), "seed": seed}
         (checkpoint.parent / "evaluation-rerun.json").write_text(json.dumps(result, indent=2))
-        print(f"{name:20s} mean_reward={result['mean_reward']:.4f}")
+        print(
+            f"{name:20s} mean_reward={result['mean_reward']:.4f} "
+            f"success={result['success_rate']:.1%} kills={result['mean_kills']:.2f}"
+        )
 
 
 def main() -> None:

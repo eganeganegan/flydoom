@@ -3,5 +3,14 @@ env:
   scenario: basic
   frame_skip: 4
   max_episode_steps: 2100
+  reward:
+    native_scale: 0.0
+    living: -0.01
+    kill: 10.0
+    hit: 0.25
+    damage_taken: -0.05
+    death: -5.0
+    ammo_spent: -0.02
+    health_gained: 0.02
 training:
-  reward_scale: 0.01
+  reward_scale: 0.1

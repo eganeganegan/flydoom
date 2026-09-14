@@ -116,6 +116,18 @@ def export_web_session(
         "node_kind": _write_array(directory, "node-kind", node_kind, "u1"),
         "edges": _write_array(directory, "edges", edges, "<u4"),
         "edge_strength": _write_array(directory, "edge-strength", edge_strength, "<f4"),
+        "telemetry": _write_array(
+            directory,
+            "telemetry",
+            np.column_stack((trace.health, trace.ammo, trace.kills)),
+            "<f4",
+        ),
+        "action_values": _write_array(
+            directory, "action-values", trace.action_values, "<f4"
+        ),
+        "reward_components": _write_array(
+            directory, "reward-components", trace.reward_components, "<f4"
+        ),
     }
     if len(skeleton_segments):
         files["skeleton_segments"] = _write_array(
@@ -129,6 +141,7 @@ def export_web_session(
     manifest = {
         "version": 1,
         "title": title,
+        "learning_mode": trace.learning_mode,
         "fps": trace.fps,
         "frame_count": len(trace.frames),
         "frame_shape": frame_shape,
@@ -141,6 +154,7 @@ def export_web_session(
         "actions": trace.actions.astype(int).tolist(),
         "rewards": trace.rewards.astype(float).tolist(),
         "action_names": action_names,
+        "reward_component_names": trace.reward_component_names.astype(str).tolist(),
         "body_ids": trace.body_ids.astype(str).tolist(),
         "types": trace.types.astype(str).tolist(),
         "regions": trace.regions.astype(str).tolist(),

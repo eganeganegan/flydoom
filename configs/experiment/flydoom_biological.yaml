@@ -1,0 +1,26 @@
+experiment:
+  name: flydoom_biological
+  variants: [real_connectome]
+  evaluation_episodes: 30
+training:
+  algorithm: three_factor
+  total_steps: 3000000
+  rollout_steps: 512
+  gamma: 0.99
+  reward_scale: 0.1
+  learning_rate: 0.0001
+  readout_learning_rate: 0.002
+  value_learning_rate: 0.005
+  eligibility_decay: 0.95
+  homeostasis_rate: 0.00001
+  target_activity: 0.10
+  weight_decay: 0.000001
+  max_weight: 1.0
+  max_readout_weight: 3.0
+  temperature: 1.0
+  dopamine_state_gain: 0.25
+  plasticity_scope: all
+output:
+  root: outputs
+  tensorboard: false
+  record_activity: true

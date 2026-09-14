@@ -109,6 +109,12 @@ def test_episode_trace_round_trip(tmp_path) -> None:
         regions=torch.tensor([1, 1, 2]).numpy().astype(str),
         types=torch.tensor([1, 2, 3]).numpy().astype(str),
         fps=20,
+        health=torch.tensor([100.0, 90.0]).numpy(),
+        ammo=torch.tensor([50.0, 49.0]).numpy(),
+        kills=torch.tensor([0.0, 1.0]).numpy(),
+        action_values=torch.zeros(2, 5).numpy(),
+        reward_components=torch.tensor([[0.0, 0.0], [1.0, -0.1]]).numpy(),
+        reward_component_names=torch.tensor([1, 2]).numpy().astype(str),
     )
     path = tmp_path / "trace.npz"
     trace.save(path)
@@ -116,3 +122,5 @@ def test_episode_trace_round_trip(tmp_path) -> None:
     assert loaded.activity.shape == (2, 3)
     assert loaded.fps == 20
     assert loaded.action_name(4) == "shoot"
+    assert loaded.health.tolist() == [100.0, 90.0]
+    assert loaded.reward_components.shape == (2, 2)

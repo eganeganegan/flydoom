@@ -15,6 +15,8 @@ This is not Doom running in a biological brain, a whole-brain simulation, or a c
 - CNN and fly-inspired visual encoders.
 - Scenario-native four-action VizDoom interfaces with no-op and shoot.
 - PPO training, deterministic evaluation, seeding, checkpoints, CSV metrics, and comparison plots.
+- Gradient-free three-factor learning with local eligibility traces, dopamine prediction
+  error, homeostasis, weight bounds, and optional KC→MBON-only plasticity.
 - topology, matched Erdős–Rényi, degree-preserving rewiring, MLP, GRU, and LSTM controls.
 - Synchronized Doom-frame/model-activity/action/reward traces.
 - A dark teal PyVista player with play/pause, scrubbing, speed, camera control, filtering, PNG, MP4, 16:9, and 9:16 output.
@@ -128,7 +130,7 @@ Weights initialize from `log1p(synapse_count)`, optionally normalize by incoming
 
 ```yaml
 model:
-  training_mode: trainable_internal  # fixed_internal | readout_only
+  training_mode: trainable_internal  # fixed_internal | readout_only | three_factor
   sign_constraints: false
   encoder: cnn                       # cnn | fly
 ```
@@ -158,25 +160,97 @@ python scripts/train.py \
 
 The `basic` environment uses the scenario's native actions: no-op, move left, move
 right, and shoot. `defend_the_center` instead uses no-op, turn left, turn right, and
-shoot. Both VizDoom groups scale rewards by `0.01` during optimization while reporting
-unscaled episode rewards.
+shoot. Both scenarios use an inspectable dopamine-like reward signal: living costs
+`-0.01` per agent step, a hit is `+0.25`, a kill is `+10`, damage costs `-0.05` per
+health point, death is `-5`, ammunition costs `-0.02`, and recovered health earns
+`+0.02` per point. The scenario-native reward is disabled by default to avoid silently
+double-counting these events. PPO receives the shaped signal multiplied by `0.1`, while
+metrics and visualizations report the readable unscaled values. These are engineering
+reward terms—a dopamine analogue—not a biological dopamine model.
 
 Use `vizdoom=defend_the_center` for the alternate scenario. Configuration groups are ordinary YAML in `configs/`; dotted `key=value` arguments override them. By default one seed trains all required variants: `real_connectome`, `erdos_renyi`, `degree_rewired`, `mlp`, `gru`, and `lstm`. The connectome, GRU, and LSTM policies carry recurrent state between observations and reset it at episode boundaries. Run multiple seeds before drawing scientific conclusions.
 
-Each run logs reward, episode length, kills, survival time, policy/value losses, entropy, gradient norm, approximate KL, clipping fraction, per-action frequencies, FPS, graph size, total/trainable parameter counts, parameter-change norm, paired before/after deterministic evaluations, reward AUC, resolved configuration, source fingerprint, final checkpoints, and a learning curve. A repeat with the same date and seed is written to a numbered run directory instead of overwriting the previous run. Inspect results with:
+Each run logs reward, every reward component, episode length, kills, hits, damage,
+health, ammunition, deaths, survival time, policy/value losses, entropy, gradient norm,
+approximate KL, clipping fraction, per-action frequencies, FPS, graph size,
+total/trainable parameter counts, parameter-change norm, paired before/after
+deterministic evaluations, success rate, reward AUC, resolved configuration, source
+fingerprint, final checkpoints, and a learning curve. A repeat with the same date and
+seed is written to a numbered run directory instead of overwriting the previous run.
+Inspect results with:
 
 ```bash
 python scripts/evaluate.py outputs/YYYY-MM-DD/fly_connectome_seed_42
 python scripts/evaluate.py outputs/YYYY-MM-DD/fly_connectome_seed_42 --rerun --episodes 10
 ```
 
+### Biological learning mode
+
+`three_factor` mode performs no backpropagation and creates no optimizer. Every
+connectome edge maintains a decaying eligibility trace from its local pre- and
+postsynaptic rate activity. A temporal-difference reward prediction error acts as the
+third, dopamine-like factor. Descending-neuron-to-action synapses use the same local
+rule with action surprise, the value readout uses a local delta rule, and homeostatic
+bias changes keep node activity bounded. The anatomical edge set never changes.
+
+Run the gradient-free controller with:
+
+```bash
+python scripts/train.py \
+  experiment=flydoom_biological data=processed \
+  model=connectome_three_factor vizdoom=basic \
+  device=cuda seed=42
+```
+
+The current preset permits local plasticity on every edge in the selected subgraph so
+it can run on the existing visual-to-descending graph. If dopaminergic neurons are
+present, the signed prediction error is also injected into their recurrent state. If
+none are present, training emits a warning and broadcasts the modulatory factor directly
+to eligible synapses.
+
+For a graph containing Kenyon cells and mushroom-body output neurons, restrict
+plasticity to annotated KC→MBON edges:
+
+```bash
+training.plasticity_scope=mushroom_body
+```
+
+This is a biologically inspired computational hypothesis, not a molecular simulation
+of a fly synapse. PPO remains the performance control.
+
+### How much training?
+
+Independent runs do not teach one another: each command starts a freshly initialized
+policy. For the small `basic` aiming task, begin with one focused 3-million-step run:
+
+```bash
+python scripts/train.py \
+  experiment=flydoom_learn data=processed model=connectome_rate vizdoom=basic \
+  device=cuda seed=42
+```
+
+The `flydoom_learn` preset trains only `real_connectome`; it does not spend the same
+budget on all five controls. Treat 3 million steps as a starting estimate, not a
+guarantee. Check `success_rate`, `mean_kills`, and the reward curve after the run. If
+the curve is still rising, try 5 million steps. If it is flat near zero, more runs are
+unlikely to repair the configuration—inspect action fractions and reward components
+first. Use three seeds while tuning and five to ten seeds for a final comparison; the
+seed runs measure reliability rather than accumulating learning.
+
+The three-factor learner is expected to be less sample-efficient than PPO. Start with a
+short `training.total_steps=100000` validation, then use the 3-million-step biological
+preset. Treat the result as an experiment: extend it only while success rate is still
+improving.
+
 ## WebGL neural cinema
 
-The primary activity viewer is a browser-based Three.js application. It avoids WSL/X11
-rendering problems and adds GPU bloom, live activity shaders, orbit controls, a Doom
-picture-in-picture feed, metrics, scrubbing, playback speed, activity gain, and
-fullscreen mode. The pinned toolchain supports Node.js `18+`, including the Node
-`18.19.1` release commonly installed by Ubuntu/WSL.
+The primary activity viewer is a browser-based Three.js instrument panel. It avoids
+WSL/X11 rendering problems and combines a large Doom replay, health/kill/ammo telemetry,
+per-action readout logits, a live reward breakdown, a visual-input map, a scrolling
+rate-activity raster, and the orbitable 3D connectome. Positive reward is cyan, damage
+and other negative reward are red, and strong firing remains orange. The pinned
+toolchain supports Node.js `18+`, including the Node `18.19.1` release commonly
+installed by Ubuntu/WSL.
 
 Export a recorded trace together with the exact graph used by the policy:
 
@@ -195,6 +269,10 @@ Open `http://localhost:5173` in the Windows browser. Drag to orbit, scroll to zo
 Space plays or pauses, Left/Right steps through frames, and the bottom controls adjust
 speed, activity gain, auto-orbit, morphology, and fullscreen. The exporter writes
 compact typed-array binaries rather than embedding a large trace in JSON.
+
+Older traces still open, but their new health, ammunition, readout-logit, and reward
+component fields appear blank. Train once with the current code to record full dashboard
+telemetry, then export that new `episode_trace.npz`.
 
 Without skeleton files, the viewer renders the real graph layout and connectome edges.
 For anatomical neurites like the reference visualization, add the official SWC folder:
