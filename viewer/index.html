@@ -3,86 +3,124 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#031315" />
-    <title>FlyDoom Neural Cinema</title>
+    <meta name="theme-color" content="#050505" />
+    <title>FlyDoom Circuit Monitor</title>
   </head>
   <body>
     <div id="app">
-      <header class="topbar glass">
+      <header class="topbar">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-index">FD//01</span>
           <div>
-            <p class="eyebrow">MALE CNS · LIVE CONNECTOME</p>
-            <h1 id="session-title">FlyDoom Neural Cinema</h1>
+            <h1 id="session-title">FLYDOOM CIRCUIT MONITOR</h1>
+            <p>MALE CNS · POLICY REPLAY · EXPERIMENTAL</p>
           </div>
         </div>
-        <div class="legend" aria-label="Activity legend">
-          <span><i class="dot resting"></i>resting</span>
-          <span><i class="dot active"></i>stimulated</span>
-          <span><i class="dot firing"></i>firing</span>
+        <div class="transport">
+          <button id="play" class="transport-button" aria-label="Play or pause">PAUSE</button>
+          <input id="timeline" type="range" min="0" max="1" value="0" step="1" aria-label="Timeline" />
+          <span id="time-current" class="clock">00:00.00</span>
+          <span class="clock-divider">/</span>
+          <span id="time-total" class="clock">00:00.00</span>
+          <label>SPEED
+            <select id="speed">
+              <option value="0.25">0.25×</option>
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select>
+          </label>
+          <button id="fullscreen" class="transport-button" aria-label="Fullscreen">FULLSCREEN</button>
         </div>
-        <button id="fullscreen" class="icon-button" title="Fullscreen">⛶</button>
       </header>
 
-      <main id="viewport" aria-label="Three-dimensional neural activity viewer"></main>
-
-      <aside class="metrics glass">
-        <div><span>NEURONS</span><strong id="node-count">—</strong></div>
-        <div><span>EDGES</span><strong id="edge-count">—</strong></div>
-        <div><span>SYNAPSES</span><strong id="synapse-count">—</strong></div>
-        <div><span>FRAME</span><strong id="frame-label">—</strong></div>
-      </aside>
-
-      <section class="focus-card glass">
-        <p class="eyebrow">PEAK ACTIVITY</p>
-        <strong id="peak-type">—</strong>
-        <span id="peak-meta">waiting for data</span>
-        <div class="activity-meter"><i id="activity-fill"></i></div>
-      </section>
-
-      <section class="doom-card glass">
-        <div class="card-heading">
-          <span>AGENT VISION</span>
-          <span id="action-label" class="pill">—</span>
-        </div>
-        <canvas id="doom-frame"></canvas>
-        <div class="reward-row">
-          <span>instant reward</span>
-          <strong id="reward-label">—</strong>
-        </div>
-      </section>
-
-      <section class="controls glass">
-        <button id="play" class="play-button" aria-label="Play or pause">▶</button>
-        <div class="timeline-wrap">
-          <div class="timeline-labels">
-            <span id="time-current">00:00.00</span>
-            <span id="time-total">00:00.00</span>
+      <main class="dashboard">
+        <section class="monitor-panel stage-panel">
+          <div class="panel-heading">
+            <span>00 / AGENT VISION</span>
+            <span id="frame-label">FRAME —</span>
           </div>
-          <input id="timeline" type="range" min="0" max="1" value="0" step="1" />
-        </div>
-        <label class="control-field">
-          <span>SPEED</span>
-          <select id="speed">
-            <option value="0.25">0.25×</option>
-            <option value="0.5">0.5×</option>
-            <option value="1" selected>1×</option>
-            <option value="2">2×</option>
-            <option value="4">4×</option>
-          </select>
-        </label>
-        <label class="control-field threshold-field">
-          <span>ACTIVITY GAIN</span>
-          <input id="gain" type="range" min="0.25" max="4" value="1.25" step="0.05" />
-        </label>
-        <button id="orbit" class="toggle active">AUTO ORBIT</button>
-        <button id="morphology" class="toggle active">MORPHOLOGY</button>
-      </section>
+          <div class="stage-screen">
+            <canvas id="doom-frame" aria-label="Recorded Doom observation"></canvas>
+          </div>
+          <div class="stage-footer">
+            <span id="action-label">ACTION —</span>
+            <span id="reward-label">DOPAMINE +0.00</span>
+          </div>
+        </section>
+
+        <aside class="monitor-panel telemetry-panel">
+          <div class="panel-heading">
+            <span>FLY / TELEMETRY</span>
+            <span id="system-state">REPLAY</span>
+          </div>
+          <div class="vitals">
+            <div><span>♥ HEALTH</span><strong id="health-value">—</strong></div>
+            <div><span>☠ KILLS</span><strong id="kills-value">—</strong></div>
+            <div><span>▮ AMMO</span><strong id="ammo-value">—</strong></div>
+          </div>
+          <div class="telemetry-lines">
+            <div><span>ALIVE</span><strong id="alive-value">0.0 s</strong></div>
+            <div><span>NEURONS</span><strong id="node-count">—</strong></div>
+            <div><span>EDGES</span><strong id="edge-count">—</strong></div>
+            <div><span>SYNAPSES</span><strong id="synapse-count">—</strong></div>
+          </div>
+
+          <div class="dopamine-block">
+            <div class="section-label"><span>REWARD / DOPAMINE ANALOGUE</span><strong id="dopamine-total">+0.00</strong></div>
+            <div class="dopamine-track"><i id="dopamine-negative"></i><b></b><i id="dopamine-positive"></i></div>
+            <div id="reward-breakdown" class="reward-breakdown"></div>
+          </div>
+
+          <div class="output-block">
+            <div class="section-label"><span>DESCENDING READOUT → BUTTON</span><span>LOGITS</span></div>
+            <div id="action-grid" class="action-grid"></div>
+          </div>
+
+          <div class="status-copy">
+            <span>MODEL STATE / RATE CODE</span>
+            <strong id="learning-mode">REWARD SHAPING ON</strong>
+          </div>
+        </aside>
+
+        <section class="monitor-panel sensory-panel">
+          <div class="panel-heading">
+            <span>01 / SENSORY INPUT</span>
+            <span>LOCAL CONTRAST + MOTION</span>
+          </div>
+          <canvas id="sensory-map" aria-label="Encoded visual input map"></canvas>
+          <div class="panel-caption">BRIGHT PIXELS MARK HIGH-CONTRAST VISUAL DRIVE</div>
+        </section>
+
+        <section class="monitor-panel neural-panel">
+          <div class="panel-heading">
+            <span>02 / NEURAL ACTIVITY</span>
+            <span id="active-count">0 RATE EVENTS</span>
+          </div>
+          <div class="neural-content">
+            <div class="raster-wrap">
+              <canvas id="activity-raster" aria-label="Neural activity over recent frames"></canvas>
+              <div class="raster-axis"><span>RECENT HISTORY</span><span>NOW</span></div>
+            </div>
+            <div id="viewport" aria-label="Three-dimensional connectome activity viewer">
+              <div class="connectome-overlay">
+                <span id="peak-type">—</span>
+                <small id="peak-meta">PEAK CELL</small>
+              </div>
+            </div>
+          </div>
+          <div class="neural-controls">
+            <label>GAIN <input id="gain" type="range" min="0.25" max="4" value="1.25" step="0.05" /></label>
+            <button id="orbit" class="state-button active">AUTO ORBIT</button>
+            <button id="morphology" class="state-button active">MORPHOLOGY</button>
+          </div>
+        </section>
+      </main>
 
       <div id="loading" class="loading-screen">
-        <div class="fly-loader"><i></i><i></i><i></i></div>
-        <p id="loading-message">Loading connectome session…</p>
-        <small>WebGL neural cinema</small>
+        <div class="loader-bars"><i></i><i></i><i></i><i></i></div>
+        <p id="loading-message">LOADING CONNECTOME SESSION</p>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>
