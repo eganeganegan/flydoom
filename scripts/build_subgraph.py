@@ -6,12 +6,25 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import torch
 
 from flydoom.data.loaders import load_connectome
-from flydoom.data.male_cns import load_male_cns_bulk, load_male_cns_neuprint
+from flydoom.data.male_cns import (
+    BULK_ROOT,
+    MALE_CNS_DOWNLOAD_URL,
+    MALE_CNS_LICENSE,
+    MALE_CNS_LICENSE_URL,
+    MALE_CNS_PAPER_DOI,
+    MALE_CNS_PROJECT_URL,
+    NEUPRINT_DATASET,
+    NEUPRINT_PAPER_DOI,
+    NEUPRINT_SERVER,
+    load_male_cns_bulk,
+    load_male_cns_neuprint,
+)
 from flydoom.data.subgraph import SubgraphSpec, extract_subgraph
 
 
@@ -80,17 +93,50 @@ def main() -> None:
     edge_index, edge_weight = selected.sparse_tensors()
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
+    source_paths = list(filter(None, (args.neurons, args.edges)))
     digest = hashlib.sha256()
-    for path in filter(None, (args.neurons, args.edges)):
+    for path in source_paths:
         digest.update(Path(path).read_bytes())
+    biological_source = args.mode in {"bulk", "neuprint"}
     metadata = {
         "source_mode": args.mode,
+        "created_utc": datetime.now(UTC).isoformat(),
+        "dataset_name": "Male CNS Connectome" if biological_source else "user-supplied",
+        "dataset_identifier": NEUPRINT_DATASET if biological_source else None,
+        "dataset_version": "v1.0" if biological_source else None,
+        "dataset_url": MALE_CNS_PROJECT_URL if biological_source else None,
+        "dataset_download_url": MALE_CNS_DOWNLOAD_URL if biological_source else None,
+        "dataset_license": MALE_CNS_LICENSE if biological_source else None,
+        "dataset_license_url": MALE_CNS_LICENSE_URL if biological_source else None,
+        "dataset_citation_doi": MALE_CNS_PAPER_DOI if biological_source else None,
+        "neuprint_citation_doi": NEUPRINT_PAPER_DOI if args.mode == "neuprint" else None,
+        "access_endpoint": (
+            f"{NEUPRINT_SERVER} ({NEUPRINT_DATASET})"
+            if args.mode == "neuprint"
+            else BULK_ROOT if args.mode == "bulk" else None
+        ),
+        "selection": {
+            "types": args.type,
+            "classes": args.classes,
+            "regions": args.region,
+            "body_ids": args.body_id,
+            "source_class": args.source_class,
+            "target_class": args.target_class,
+            "source_region": args.source_region,
+            "target_region": args.target_region,
+            "min_synapses": args.min_synapses,
+            "num_hops": args.num_hops,
+            "max_neurons": args.max_neurons,
+            "top_connected": args.top_connected,
+            "shortest_path_union": not args.no_path_pruning,
+        },
         "selected_neurons": selected.node_count,
         "selected_edges": selected.edge_count,
         "total_synapses": float(selected.edges["synapse_count"].sum()),
         "sensory_nodes": int(selected.neurons["is_sensory"].sum()),
         "descending_nodes": int(selected.neurons["is_descending"].sum()),
-        "source_sha256": digest.hexdigest() or None,
+        "source_files": source_paths,
+        "source_sha256": digest.hexdigest() if source_paths else None,
         "sparse_layout": "coo",
     }
     torch.save(

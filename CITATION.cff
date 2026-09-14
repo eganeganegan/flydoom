@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: >-
+  If you use FlyDoom, cite this software and the external data, environment, and
+  methods used by your experiment as described in README.md.
+title: FlyDoom
+type: software
+authors:
+  - name: FlyDoom contributors
+version: 0.1.0
+repository-code: https://github.com/eganeganegan/flydoom
+url: https://github.com/eganeganegan/flydoom
+keywords:
+  - Drosophila
+  - connectomics
+  - reinforcement learning
+  - VizDoom
+  - three-factor learning
+references:
+  - type: dataset
+    title: Male CNS Connectome v1.0
+    authors:
+      - name: MaleCNS consortium
+    year: 2026
+    url: https://male-cns.janelia.org/
+  - type: article
+    title: >-
+      Sexual dimorphism in the complete connectome of the Drosophila male central
+      nervous system
+    authors:
+      - family-names: Berg
+        given-names: Stuart
+      - name: MaleCNS consortium
+    year: 2026
+    journal: Cell
+    url: https://www.cell.com/cell/fulltext/S0092-8674(26)00942-6
+  - type: article
+    title: "neuPrint: An open access tool for EM connectomics"
+    authors:
+      - family-names: Plaza
+        given-names: Stephen M.
+    year: 2022
+    journal: Frontiers in Neuroinformatics
+    doi: 10.3389/fninf.2022.896292
+  - type: conference-paper
+    title: "ViZDoom: A Doom-based AI research platform for visual reinforcement learning"
+    authors:
+      - family-names: Kempka
+        given-names: Michal
+    year: 2016
+    doi: 10.1109/CIG.2016.7860433

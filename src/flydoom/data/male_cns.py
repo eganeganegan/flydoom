@@ -16,6 +16,12 @@ NEUPRINT_SERVER = "https://neuprint.janelia.org"
 NEUPRINT_DATASET = "male-cns:v1.0"
 BULK_ROOT = "gs://flyem-male-cns/v1.0/connectome-data/flat-connectome/"
 SKELETON_ROOT = "gs://flyem-male-cns/v1.0/segmentation/skeletons-malecns/skeletons-swc/"
+MALE_CNS_PROJECT_URL = "https://male-cns.janelia.org/"
+MALE_CNS_DOWNLOAD_URL = "https://male-cns.janelia.org/download/"
+MALE_CNS_LICENSE = "CC BY 4.0"
+MALE_CNS_LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/"
+MALE_CNS_PAPER_DOI = "10.1101/2025.10.09.680999"
+NEUPRINT_PAPER_DOI = "10.3389/fninf.2022.896292"
 REQUIRED_FILES = (
     "body-annotations-male-cns-v1.0-minconf-0.5.feather",
     "body-neurotransmitters-male-cns-v1.0.feather",
